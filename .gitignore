@@ -1,0 +1,9 @@
+# 模型权重文件 (太大，不提交)
+best.pt
+last.pt
+*.onnx
+*.engine
+
+# Python
+__pycache__/
+*.pyc
