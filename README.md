@@ -43,29 +43,15 @@
 - ✅ `Robot.py` 复制到 `调试记录/`（本地 import，用 `.gitignore` 排除）
 - ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
 
-#### 步骤④ 位姿估计 🔄
+#### 步骤④ 位姿估计 🔄 — 环境配置血泪史
 
-##### ❌ 错误尝试: AutoDL 云端 (PyTorch 2.8 + Python 3.12 + CUDA 12.8 + RTX 5090)
-- **失败原因**: Python 3.12 太新，pytorch3d 无预编译包、mycpp .so 不兼容。依赖链断裂成本过高。
+| # | 方案 | 结果 | 根因 |
+|---|------|------|------|
+| 1 | Intel Arc 本地 | 🚫 | 硬件无 CUDA |
+| 2 | AutoDL Py3.12+CU12.8 | 🚫 | Python 太新，mycpp .so 不兼容 |
+| 3 | Lenovo uv+Py3.10 | 🚫 | Windows 无 pytorch3d wheel，缺 MSVC |
+| 4 | Lenovo conda+Py3.10 | 🚫 | conda-forge 炸 torch 版本，nvcc 缺失 |
+| 5 | **AutoDL conda Py3.10 子环境** | 🔄 进行中 | CUDA 版本对齐后 pytorch3d 编译中 |
 
-##### 🔄 重新开始: Lenovo 本机 (RTX 3050 + Python 3.10 + uv)
-- ✅ 清理桌面旧文件，重新打包干净版 `FoundationPose调试包/` (909MB)
-- ✅ 包内路径修正为平铺结构（Foundationpose/ 作为子目录）
-- ✅ 选用 uv 做环境管理 + Python 3.10 + PyTorch CUDA 12.1
-- ⏳ 待执行: Lenovo 上 `uv venv → pip install → demo_env_check.py → demo_pose_offline.py`
-  1. `pytorch3d` 无 py312+cu128 预编译包 → 源码编译超时
-  2. 创建假 `pytorch3d` 兼容包绕过后 → `transformations`/`kornia`/`omegaconf`/`h5py`/`ninja` 逐个缺包
-  3. `mycpp/build/mycpp.cpython-39-x86_64-linux-gnu.so` 是 Python 3.9 编译的，3.12 加载不了
-  4. 写 `mycpp_fallback.py` Python 替代后 → `nvdiffrast` JIT 编译 CUDA kernel 一直卡住
-##### 🔄 新方案: 同实例内建 Python 3.10 子环境
-- **思路**: RTX 5090 驱动 CUDA 13.0 向下兼容，在同一实例内用 conda 建 Python 3.10 环境，装 PyTorch CUDA 12.4 的预编译版。pytorch3d、mycpp 等库对 Python 3.10 有完整预编译支持。
-- **待执行**:
-  ```bash
-  conda create -n fp310 python=3.10 -y
-  conda activate fp310
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-  pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/whl/py310_cu124_pyt240/download.html
-  pip install nvdiffrast warp-lang trimesh open3d imageio scikit-learn pyyaml kornia omegaconf einops h5py ninja transformations
-  python demo_env_check.py
-  ```
+**当前状态**: 云端 fp310 环境，pytorch3d 源码编译中。完成后还需 nvdiffrast + 其余依赖。
 
