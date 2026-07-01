@@ -44,16 +44,23 @@
 - ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
 
 #### 步骤④ 位姿估计 — 云端 GPU 部署 🔄
-- ✅ 环境诊断确认本地 Intel Arc 不支持 CUDA
-- ✅ 选择 AutoDL 云 GPU 方案
-  - 配置: RTX 5090 / 32GB / 25核 / 90GB 内存 / Ubuntu 22.04
-  - 镜像: PyTorch 2.8.0 + CUDA 12.8 + Python 3.12
-  - 价格: ¥2.78/小时（用完关机即停止扣费）
-- ✅ 基础依赖全部安装: nvdiffrast / warp-lang / trimesh / open3d
-- 🔄 **待完成**: pytorch3d 正在从源码编译（3-5分钟）
-  - pip 阿里云镜像没有预编译包 → 改用 `git+https://github.com/facebookresearch/pytorch3d.git`
-- ⚠️ 已知问题:
-  - Python 3.12 不是官方推荐但实际兼容
-  - nvdiffrast 从 Foundationpose 解压包的本地源码装（阿里云镜像没有）
-  - pytorch3d 必须源码编译（没有 py312+cu128 的预编译包）
+
+##### ❌ 错误尝试 1: PyTorch 2.8 + Python 3.12 + CUDA 12.8 (RTX 5090)
+- **镜像**: PyTorch 2.8.0 / Python 3.12 / CUDA 12.8 / Ubuntu 22.04
+- **失败原因链**:
+  1. `pytorch3d` 无 py312+cu128 预编译包 → 源码编译超时
+  2. 创建假 `pytorch3d` 兼容包绕过后 → `transformations`/`kornia`/`omegaconf`/`h5py`/`ninja` 逐个缺包
+  3. `mycpp/build/mycpp.cpython-39-x86_64-linux-gnu.so` 是 Python 3.9 编译的，3.12 加载不了
+  4. 写 `mycpp_fallback.py` Python 替代后 → `nvdiffrast` JIT 编译 CUDA kernel 一直卡住
+##### 🔄 新方案: 同实例内建 Python 3.10 子环境
+- **思路**: RTX 5090 驱动 CUDA 13.0 向下兼容，在同一实例内用 conda 建 Python 3.10 环境，装 PyTorch CUDA 12.4 的预编译版。pytorch3d、mycpp 等库对 Python 3.10 有完整预编译支持。
+- **待执行**:
+  ```bash
+  conda create -n fp310 python=3.10 -y
+  conda activate fp310
+  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+  pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/whl/py310_cu124_pyt240/download.html
+  pip install nvdiffrast warp-lang trimesh open3d imageio scikit-learn pyyaml kornia omegaconf einops h5py ninja transformations
+  python demo_env_check.py
+  ```
 
