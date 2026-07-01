@@ -43,3 +43,9 @@
 - ✅ `Robot.py` 复制到 `调试记录/`（本地 import，用 `.gitignore` 排除）
 - ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
 
+#### 步骤④ 位姿估计环境准备 🔄
+- ✅ `demo_env_check.py` — GPU / CUDA / FoundationPose 全套依赖检查脚本
+- ✅ `demo_pose_offline.py` — 离线位姿估计 Demo（复刻 run_demo.py 核心逻辑）
+  - 加载 3D 模型 → 初始化 FoundationPose → register + track
+- ⏳ 待执行: 先在 `vision` 环境跑 `demo_env_check.py` 看缺什么
+
