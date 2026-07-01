@@ -43,13 +43,17 @@
 - ✅ `Robot.py` 复制到 `调试记录/`（本地 import，用 `.gitignore` 排除）
 - ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
 
-#### 步骤④ 位姿估计环境准备 🔄
-- ✅ `demo_env_check.py` — GPU / CUDA / FoundationPose 全套依赖检查脚本
-- ✅ `demo_pose_offline.py` — 离线位姿估计 Demo（复刻 run_demo.py 核心逻辑）
-  - 加载 3D 模型 → 初始化 FoundationPose → register + track
-- ✅ 环境诊断完成 — Intel Arc 显卡不支持 CUDA，无法本地运行 FoundationPose
-- ✅ 整理 `桌面/位姿估计-调试包/` — 包含所有 Demo + 权重 + 数据 + 源码
-  - 路径: `C:\Users\樊予笑\Desktop\位姿估计-调试包\`
-  - 拷贝到有 NVIDIA 显卡的电脑上即可开始步骤④
-  - 包内 README 写明完整操作步骤
+#### 步骤④ 位姿估计 — 云端 GPU 部署 🔄
+- ✅ 环境诊断确认本地 Intel Arc 不支持 CUDA
+- ✅ 选择 AutoDL 云 GPU 方案
+  - 配置: RTX 5090 / 32GB / 25核 / 90GB 内存 / Ubuntu 22.04
+  - 镜像: PyTorch 2.8.0 + CUDA 12.8 + Python 3.12
+  - 价格: ¥2.78/小时（用完关机即停止扣费）
+- ✅ 基础依赖全部安装: nvdiffrast / warp-lang / trimesh / open3d
+- 🔄 **待完成**: pytorch3d 正在从源码编译（3-5分钟）
+  - pip 阿里云镜像没有预编译包 → 改用 `git+https://github.com/facebookresearch/pytorch3d.git`
+- ⚠️ 已知问题:
+  - Python 3.12 不是官方推荐但实际兼容
+  - nvdiffrast 从 Foundationpose 解压包的本地源码装（阿里云镜像没有）
+  - pytorch3d 必须源码编译（没有 py312+cu128 的预编译包）
 
