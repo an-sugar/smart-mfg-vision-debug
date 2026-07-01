@@ -43,11 +43,16 @@
 - ✅ `Robot.py` 复制到 `调试记录/`（本地 import，用 `.gitignore` 排除）
 - ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
 
-#### 步骤④ 位姿估计 — 云端 GPU 部署 🔄
+#### 步骤④ 位姿估计 🔄
 
-##### ❌ 错误尝试 1: PyTorch 2.8 + Python 3.12 + CUDA 12.8 (RTX 5090)
-- **镜像**: PyTorch 2.8.0 / Python 3.12 / CUDA 12.8 / Ubuntu 22.04
-- **失败原因链**:
+##### ❌ 错误尝试: AutoDL 云端 (PyTorch 2.8 + Python 3.12 + CUDA 12.8 + RTX 5090)
+- **失败原因**: Python 3.12 太新，pytorch3d 无预编译包、mycpp .so 不兼容。依赖链断裂成本过高。
+
+##### 🔄 重新开始: Lenovo 本机 (RTX 3050 + Python 3.10 + uv)
+- ✅ 清理桌面旧文件，重新打包干净版 `FoundationPose调试包/` (909MB)
+- ✅ 包内路径修正为平铺结构（Foundationpose/ 作为子目录）
+- ✅ 选用 uv 做环境管理 + Python 3.10 + PyTorch CUDA 12.1
+- ⏳ 待执行: Lenovo 上 `uv venv → pip install → demo_env_check.py → demo_pose_offline.py`
   1. `pytorch3d` 无 py312+cu128 预编译包 → 源码编译超时
   2. 创建假 `pytorch3d` 兼容包绕过后 → `transformations`/`kornia`/`omegaconf`/`h5py`/`ninja` 逐个缺包
   3. `mycpp/build/mycpp.cpython-39-x86_64-linux-gnu.so` 是 Python 3.9 编译的，3.12 加载不了
