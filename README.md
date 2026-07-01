@@ -47,5 +47,9 @@
 - ✅ `demo_env_check.py` — GPU / CUDA / FoundationPose 全套依赖检查脚本
 - ✅ `demo_pose_offline.py` — 离线位姿估计 Demo（复刻 run_demo.py 核心逻辑）
   - 加载 3D 模型 → 初始化 FoundationPose → register + track
-- ⏳ 待执行: 先在 `vision` 环境跑 `demo_env_check.py` 看缺什么
+- ✅ 环境诊断完成 — Intel Arc 显卡不支持 CUDA，无法本地运行 FoundationPose
+- ✅ 整理 `桌面/位姿估计-调试包/` — 包含所有 Demo + 权重 + 数据 + 源码
+  - 路径: `C:\Users\樊予笑\Desktop\位姿估计-调试包\`
+  - 拷贝到有 NVIDIA 显卡的电脑上即可开始步骤④
+  - 包内 README 写明完整操作步骤
 
