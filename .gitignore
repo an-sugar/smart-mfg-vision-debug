@@ -4,6 +4,14 @@ last.pt
 *.onnx
 *.engine
 
+# 外部依赖文件（需自行复制到本目录）
+Robot.py
+
+# 调试产物
+captures/
+masks/
+results/
+
 # Python
 __pycache__/
 *.pyc
