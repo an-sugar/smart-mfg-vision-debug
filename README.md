@@ -1,101 +1,150 @@
 # 视觉部分调试记录
 
 > 项目: 智造赛 — 物理产线视觉与控制系统
-> 开始日期: 2026-07-01
-> 工作目录: `soft/soft/Foundationpose/`
+> 更新: 2026-07-08
 
 ---
 
-## 调试流程概览
+## 项目结构（按模块划分）
 
-| 步骤 | 内容 | 状态 |
+```
+调试记录/
+├── README.md                          # 本文件
+├── Robot.py                           # FR3 XML-RPC SDK (本地引用)
+├── best.pt                            # YOLOv8 分割模型权重
+│
+├── 📁 01_相机基础/
+│   ├── demo_camera_test.py            # RealSense 连接 + 内参 + 实时预览
+│   └── demo_env_check.py              # GPU/CUDA/依赖版本检查
+│
+├── 📁 02_YOLO分割/
+│   ├── demo_yolo_test.py              # YOLO 分割验证 (单帧 + 可视化)
+│   └── quick_capture.py               # 最小化拍照 + YOLO 检测
+│
+├── 📁 03_机器人基础/
+│   ├── demo_drag_teach.py             # 拖动示教开关控制
+│   ├── demo_two_point_move.py         # 两点拾放 MoveJ
+│   ├── demo_move_back_forth.py        # 两点往复测试
+│   ├── demo_move_ik.py                # IK 求解 + 绝对定位
+│   ├── save_joints.py                 # 独立关节角保存 (20004 备用)
+│   └── test_fk_convention.py          # FK 欧拉角约定测试 (Rz@Ry@Rx)
+│
+├── 📁 04_手眼标定/
+│   ├── demo_handeye_calib.py          # 旧版标定 (Charuco)
+│   ├── handeye_collect.py             # 交互式标定数据采集 (拖动示教)
+│   ├── handeye_auto.py                # 自动标定采集 (MoveJ 到预设位姿)
+│   ├── handeye_solve.py               # 标定求解 (Park/Horaud/Andreff)
+│   ├── camera_to_robot.py             # 4×4 坐标转换验证
+│   ├── T_cam_to_ee.txt                # 标定结果: 相机→法兰变换矩阵
+│   ├── handeye_data_*.json            # 标定数据集
+│   └── object_in_base.json            # 坐标转换结果示例
+│
+├── 📁 05_云端FP位姿/
+│   ├── demo_capture_for_cloud.py      # 本地采集打包 (color+depth+K+YOLO mask)
+│   ├── demo_cloud_pose.py             # 云端 FoundationPose 位姿估计
+│   ├── demo_drag_capture_cloud.py     # 拖动示教 + 自动打包上传
+│   ├── demo_pose_offline.py           # 离线 FP 测试
+│   └── demo_pose_to_robot.py          # FP 结果 → 机器人坐标
+│
+├── 📁 06_全链条方案/
+│   ├── demo_drag_with_preview.py      # 拖动示教 + 实时 YOLO 预览 + 空格拍照
+│   ├── demo_senior_approach.py        # ⭐ 学长方案复刻 (两次定位+工具系平移)
+│   ├── full_pipeline_final.py         # 两阶段全链条 (Phase1 拍照, Phase2 贴矩阵→移动)
+│   └── full_pipeline_v2.py            # 一键全链条 V2
+│
+├── 📁 captured_cloud/                 # 拍照数据 (gitignored)
+│   └── 2026MMDD_HHMMSS/
+│       ├── color.png
+│       ├── depth.npy
+│       ├── mask_object1.png
+│       ├── camera_K.txt
+│       └── photo_joints.txt
+│
+└── 📁 错误尝试/ (仅供参考)
+    ├── 错误尝试_mycpp_fallback.py     # C++ .so Python 替换
+    ├── 错误尝试_pytorch3d_transforms_shim.py
+    └── 错误尝试_setup_fake_pytorch3d.py
+```
+
+---
+
+## 两种移动方案对比
+
+| | 实测法 (V3) | 学长方案 |
+|---|---|---|
+| 脚本 | `simple_move_v3.py` (在 Foundationpose/) | `demo_senior_approach.py` |
+| 定位次数 | 1 次 | 2 次 (粗调+精调) |
+| 坐标系 | 基坐标系 (ref=2) | 工具坐标系 (ref=4) |
+| 旋转对齐 | 无 (依赖 V3 经验映射) | MoveJ 转 J0 对齐物体 |
+| 平移方式 | FK + 实测偏移 | 三角函数近似 (大角度) / FP 直移 (小角度) |
+| 相机偏移 | X=0 Y=40 Z=-90 (卷尺测量) | 同左 |
+| 优点 | 简单直接 | 不依赖基坐标绝对位置 |
+| 精度 | 正常拍照姿态下可用 | 二次定位更精细 |
+
+### 实测法 V3.1 转换公式
+
+```python
+# 相机→法兰映射 (相机绕光轴180°)
+obj_f_x = CAM_X - cx          # 0 - cx
+obj_f_y = CAM_Y - cz          # 40 - cz
+obj_f_z = -CAM_Z - cy + cz*0.25  # 90 - cy + 0.25*cz
+
+# 物体基坐标 = FK(拍照关节角) + 物体法兰偏移
+obj_base = FK_photo.pos + obj_flange
+
+# 移动量 = 物体基坐标 - 抓取位FK - 安全余量
+delta = obj_base - FK_grasp.pos - [0, 0, 30]
+```
+
+### 工具坐标系方向 (ref=4) — 实测确认
+
+| 轴 | dir=1 方向 |
+|----|-----------|
+| X+ | **上**（抬） |
+| Y+ | **左** |
+| Z+ | **前** |
+
+---
+
+## 核心链路
+
+```
+RealSense D435 (RGB-D)
+    → YOLOv8 (best.pt, mask 分割)
+    → AutoDL (FoundationPose, CUDA 12.8, RTX 5090)
+    → 4×4 位姿矩阵
+    → V3 实测法 或 学长工具系平移
+    → FR3 StartJOG / MoveJ
+```
+
+---
+
+## 已知问题
+
+| 问题 | 影响 | 处理 |
 |------|------|------|
-| ① | 环境依赖检查 | ✅ 完成 (2026-07-01) |
-| ② | YOLO 分割验证 | ✅ 完成 (2026-07-01) |
-| ③ | 拖动示教控制 | ✅ 完成 (2026-07-01) |
-| ④ | 离线位姿估计 | ✅ 完成 (2026-07-01) |
-| ⑤ | 实时联调 (采集→云端→位姿) | ✅ 完成 (2026-07-01) |
-| ⑥ | 机器人移动到位姿位置 | ✅ 完成 (2026-07-02) |
-| ⑦ | 全体统调 + 两点 Pick-and-Place | 🔄 进行中 (2026-07-03) |
-| ⑧ | 手眼标定 | ⬜ 待做 |
+| 20004 实时端口不稳定 | GetActualJointPosDegree 常返回全零 | 从示教器手动抄关节角 |
+| 手眼标定旋转变化不足 | calibrateHandEye Tsai 失败 | Park 收敛但结果与实测不符，继续用实测值 |
+| FR3 FK 欧拉角约定 | 4×4 矩阵链算不准 | 用 V3 简单加减法 (Rz@Ry@Rx 已确认) |
+| 拍照姿态限制 | V3 在 J5 偏离 90° 太多时不准 | 尽量保持手腕朝下拍照 |
 
 ---
 
-## 日志
+## 云端 FP 操作
 
-### 2026-07-01
+```bash
+# 1. 本机拍照
+python demo_drag_with_preview.py  # 空格拍照, ESC退出
 
-#### 环境搭建
-- ✅ 创建 conda 虚拟环境 `vision` (Python 3.10)
-  - 路径: `D:\anaconda\envs\vision\`
-  - 用 `conda init powershell` 解决 PowerShell 激活问题
-- ✅ 安装依赖: `ultralytics==8.4.83`, `opencv-python==4.13.0`, `numpy`, `pyrealsense2`, `torch==2.12.1`
-- ✅ 复制 `best.pt` 到 `调试记录/` (已配置 `.gitignore` 排除)
+# 2. 上传到 AutoDL (拖拽 captured_cloud/最新文件夹)
 
-#### 步骤① 相机连接测试 ✅
-- `demo_camera_test.py` — 待运行（接 RealSense 后测试）
+# 3. AutoDL 终端
+conda activate fp310
+cd ~/Foundationpose
+python demo_cloud_pose.py --data /root/202607XX_HHMMSS --mesh /root/obj_OBJ/mesh3/plane2.obj
 
-#### 步骤② YOLO 分割验证 ✅ 完成
-- ✅ 模型正常检出 → 训练集图片验证通过 + 比赛道具拍照验证通过
-- ✅ 成功输出 mask 到 `masks/obj*.png`
-- ⚠️ 之前无检测的原因: 拍摄角度+环境复杂，非模型问题
-
-#### 步骤③ 拖动示教控制 ✅ 完成
-- ✅ `demo_drag_teach.py` — 纯拖动示教脚本
-- ✅ `Robot.py` 复制到 `调试记录/`（本地 import，用 `.gitignore` 排除）
-- ✅ 拖动示教成功进入 — 清错 → 上使能 → Mode(1) → DragTeachSwitch(1)
-
-#### 步骤④ 位姿估计 🔄 — 环境配置血泪史
-
-| # | 方案 | 结果 | 根因 |
-|---|------|------|------|
-| 1 | Intel Arc 本地 | 🚫 | 硬件无 CUDA |
-| 2 | AutoDL Py3.12+CU12.8 | 🚫 | Python 太新，mycpp .so 不兼容 |
-| 3 | Lenovo uv+Py3.10 | 🚫 | Windows 无 pytorch3d wheel，缺 MSVC |
-| 4 | Lenovo conda+Py3.10 | 🚫 | conda-forge 炸 torch 版本，nvcc 缺失 |
-| 5 | **AutoDL conda Py3.10 子环境** | 🔄 进行中 | CUDA 版本对齐后 pytorch3d 编译中 |
-
-**当前状态**: ✅ 全部跑通！
-
-#### 🎉 突破: 全链条联调成功 (20:42)
-- ✅ `demo_cloud_pose.py` — 云端位姿估计脚本
-- ✅ `demo_capture_for_cloud.py` — 本地采集脚本
-- ✅ **端到端跑通**: RealSense 拍照 → YOLO 分割 → 上传 AutoDL → FoundationPose 位姿估计 → 返回 4×4 矩阵
-  - mustard0: 评分 135.3, 1.4s
-  - plane2.obj (自建模型): 评分 92.4, 1.4s
-- ✅ 全链条打通: ① 拍照 ② YOLO ③ 上传 ④ 位姿 ⑤ 返回 全部就绪
-- ⬜ 下一步: 手眼标定 + IK 求解 + 机器人执行抓取
-
-### 2026-07-02
-
-#### 步骤⑥ 机器人移动到位姿位置 🎉 完成
-- ✅ 全链条联调: RealSense拍照 → YOLO(drone 95.6%) → 上传 → 位姿1.4s → 下载 → 机器人移动
-- ✅ 解决 FR3 "PTP关节指令超限" 错误 → 需在示教器上物理复位+上使能
-- ✅ 解决 20004 实时数据口断连问题 → 用已知初始位推算, 不依赖读数
-- ✅ `simple_move.py` — 一条命令从位姿到机器人就位
-- ✅ `full_pipeline.py` — 最终全自动化脚本
-- ✅ `demo_drag_capture_cloud.py` — 拖动示教版采集脚本（15秒自动定时）
-- ✅ `demo_move_ik.py` — IK 求解 + MoveJ 绝对定位
-- ✅ 整理初赛考题 → `智造赛初赛备考指南.md` (Obsidian)
-
-### 2026-07-03
-
-#### 步骤⑦ 全体统调 + 两点 Pick-and-Place 🔄
-
-- ✅ 学习法奥官方 Python SDK 文档 (接口规范/参数格式/返回值)
-- ✅ `demo_move_back_forth.py` — 两点往复移动 (MoveJ)
-- ✅ `quick_capture.py` — 纯拍照+YOLO (不含拖动示教)
-- ✅ `demo_two_point_move.py` — 拖动示教激活 + 两点移动
-  - 从示教器获取抓取位和放置位关节角
-  - DragTeach 进/出激活伺服 → MoveJ 成功执行
-- ✅ `full_pipeline_v2.py` — 全流程 V2 (拍照→FP→移动)
-- ✅ **全链条再次跑通**: 拍照(YOLO conf=0.36) → 上传 → FP 位姿(1.4s) → 下载
-- 🔄 FP 位姿 → 机器人偏移量: `simple_move.py` 执行但精度待验证
-  - 本次位姿: X=-13.6 Y=31.5 Z=404.8mm rz=-3.24°
-- ⚠️ **核心问题**: 手眼标定缺失, FP 相机坐标 → 机器人基坐标偏差大
-- ✅ 整理 Obsidian 备考笔记:
-  - `初赛-Python编程考点.md` (14题原题+答案)
-  - `初赛-Python基础知识复习笔记.md` (9考点+7预测+44练习题)
-  - `初赛-FR3机器人SDK考点.md` (SDK接口+25练习题)
-  - `智造赛初赛备考指南.md` (6大模块全解析)
-
+# 4. 复制 4×4 矩阵 → 写 position1.txt → 跑移动
+python simple_move_v3.py  # 实测法
+# 或
+python demo_senior_approach.py  # 学长方案
+```
